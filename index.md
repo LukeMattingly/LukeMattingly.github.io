@@ -1,14 +1,31 @@
-# Here I'll share some stories and experiences 
+# Lessons from Scaling Elasticsearch the Wrong Way 🚨
 
-## Elasticsearch
 
-At a previous job for a b2b ecommerce shop we built out a product search page. Something not that dissimilar from a home depot search screen: [homedepot screenshot](https://www.homedepot.com/b/Outdoors-Outdoor-Power-Equipment-Trimmers-Edgers-String-Trimmers/N-5yc1vZbx8i)
+## Introduction 
 
-If your not so familiar with Elasticsearch a brief overview is it's a document based db, where documents are json blobs, and rather than tables or colllections they are stored in 'indexes'. 
+At a previous job for a b2b ecommerce shop, i worked as a backend software engineer on a small team of 3. One of our products involved a platform for hosting brands products (think Shopify but much smaller and you don't set anything up just upload your product file). Our software provided a search page to lookup products, internally and uninspired we called it "Product Search". Something not that dissimilar from a home depot search screen: [homedepot search page](https://www.homedepot.com/b/Outdoors-Outdoor-Power-Equipment-Trimmers-Edgers-String-Trimmers/N-5yc1vZbx8i)
+
+## What is Elasticsearch
+If your not so familiar with Elasticsearch a brief overview is it's a document based db. Utilized for full text search due to it's backing by Apache Lucene. Where it stores documents such as json blobs rather than rows, and 'indexes'provide groupings compared to tables in a MySQL or colllections in Mongo.
+
+Example document:
+```json
+{
+  "product_id": 12345,
+  "name": "Cordless Drill",
+  "category": "Electronics",
+  "price": 69.99,
+  "stock": 50,
+  "description": "An electric drill which uses rechargeable batteries"
+}
+```
+
+example index name: `dewalt-jkA9masd89jkalk`
 
 Rather than hosting our own Elasticsearch cluster (which we had on-prem for logging, but was not well maintained), and since we were migrating to AWS, we checked out AWS OpenSearch (previously AWS Elasticsearch before the AWS v Elastic drama).
 
-Similar to the home depot product search screen where you have a search box, product tiles with images, prices, descriptions etc facets and filters etc, our was the same. Each 'index' in our elasticsearch cluster (i'll get to it being a cluster soon) was based on a company whose products we supported. Think Dewalt(maybe has trimmers/ drills etc, whole long list of SKUs). We had a service where users would upload their file of products blah blah -> eventually it gets into Elasticsearch so we could use the lucene index to do some full text searching. 
+When searching for products on a site similar to the home depot product search screen where you have a search box, product tiles with images, prices, descriptions etc facets and filters etc, our was the same. Each 'index' in our elasticsearch cluster (i'll get to it being a cluster soon) was based on a company whose products we supported. Think Dewalt(maybe has trimmers/ drills etc, whole long list of SKUs). We had a service where users would upload their file of products blah blah -> eventually it gets into Elasticsearch so we could use the lucene index to do some full text searching. 
+
 
 Everything's great right? And it was, honestly for a while. 
 
@@ -50,13 +67,13 @@ How do queries work though? User searches for 'cordless drill', query is routed 
 
 A little more on our indexing, as each brand "Dewalt" uploaded a file we created a specific index for them. company_uuid kept the indexes unique and each company only had one index(their whole dataset of products). We did a full replace of the index each time they uploaded, creating a temp index, and then swapping it over to live once all of the products/documents/jsons were populated. 
 
-These indexes on average were quite small, each well under 1GB. This was great, it meant we store tons of data, for cheap. Well it turns out there's a downside to managing a large number of small indexes. Their associated shards.
+Each index was relatively small—well under 1GB on average. This was great because it allowed us to store large amounts of data at a low cost. Well it turns out there's a downside to managing a large number of small indexes. Their associated shards.
 
 Elasticsearch recommends aiming for shard sizes between 10GB and 50GB to optimize performance. When have many small shards each shard regardless of size consumer memry and file handles, and when manging thousands of small shards this can strain a cluster. Oh boy did we start to feel the pain. 
 
-We scaled up, we scaled out. We had a huge 32GB high memory machine for each 3 node master, 5 node cluster. And what was the data? oh just a few hundred thousand product documents. Only a couple of gigs of actual data in total, surely under 50, likely under 10 in total. 
+We scaled up, we scaled out. We had a huge 32GB high memory machine for each 3 node master, 5 node cluster. And what was the data? only a few hundred thousand product documents. Only a couple of gigs of actual data in total, surely under 50, likely under 10 in total. 
 
-#### What had happened? 
+### What had happened? 
 
 well as we kept adding more brands and hence creating new indexes, thus creating new shards. and not just one shard, but multiple as AWS creates that read replica shard for you. 
 
@@ -66,7 +83,7 @@ AWS domains typically have a default cluster-level limit of around 2000 shards p
 
 At this point we were runnign into issues where our cluster was full, we couldnt keep adding nodes(more cost), and it was being manually scaled. We had been deleting indexes manually to free up space, but users file uploads weren't getting into the cluster anymore. 
 
-How did we fix it?
+### Turning the Tide: How did we fix it?
 
 well when AWS and Elasticsearch tell you that you should plan based on your data volumne for your indexing strategy you should listen. for our data size, we could fit everything in one index. Brief example table
 
@@ -91,3 +108,16 @@ Performance Consideration:
 Even if the raw data size is low, having too many shards (and by extension, too many indexes) can impact cluster performance, slow down cluster state updates, and increase memory usage. Following the guideline of “20 shards per GB of heap” ensures that your nodes aren’t overloaded.
 
 big shout out to the AWS engineers who I met with this, in the end it was bad design on our part, but they were able to try and troubleshoot and assist. In the middle of this slowly creepign issue we did a major version upgrade as well, that failed halfway through due to our cluster being in such a degraded state, but we ended up making it out the other side!
+
+### Final Thoughts
+A huge shoutout to AWS engineers who helped troubleshoot this.
+
+The issue wasn’t Elasticsearch’s fault—it was bad design on our part.
+
+- We ignored index planning guidelines.
+
+- We scaled without understanding shard overhead.
+
+- We had to refactor our approach after hitting the limit.
+
+To make matters worse, we attempted a major version upgrade in the middle of this mess. It failed halfway through due to our degraded cluster state. But we made it out the other side!
