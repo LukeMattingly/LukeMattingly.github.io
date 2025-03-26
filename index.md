@@ -1,6 +1,5 @@
 # Lessons from Scaling Elasticsearch the Wrong Way 🚨
 
-
 ## Introduction 
 
 At a previous job for a b2b ecommerce shop, i worked as a backend software engineer on a small team of 3. One of our products involved a platform for hosting brands products (think Shopify but much smaller and you don't set anything up just upload your product file). Our software provided a search page to lookup products, internally and uninspired we called it "Product Search". Something not that dissimilar from a home depot search screen: [homedepot search page](https://www.homedepot.com/b/Outdoors-Outdoor-Power-Equipment-Trimmers-Edgers-String-Trimmers/N-5yc1vZbx8i)
