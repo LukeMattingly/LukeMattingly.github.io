@@ -2,7 +2,7 @@
 layout: post
 title:  "Lessons from Scaling Elasticsearch the Wrong Way"
 date:   2025-03-25 20:09:29 -0600
-categories: databases, work, sharding, replication
+categories: work
 ---
 
 # **Lessons from Scaling Elasticsearch the Wrong Way**
