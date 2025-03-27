@@ -1,4 +1,6 @@
-# Welcome to My Dev Blog  
+---
+title: "Welcome to My Dev Blog"
+---
 
 This is where I document my journey as a backend software engineer—projects, failures, lessons learned. I'll explore new languages like Rust, Go, and Elixir, alongside deep dives into machine learning, vector databases, CLIP, agents, and recommendation systems.  
 
