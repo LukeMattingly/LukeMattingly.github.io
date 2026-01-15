@@ -8,17 +8,16 @@ categories: work
 
 # **Building Ingestion for Vertex AI Discovery Engine**
 
-
+---
 
 ## **What are we trying to do**
 
 
-I've setup a Vertex AI Search Datastore , previously known as Discovery Engine. 
-
-It's essentially a managed hyrbid vector store, which is extremely helpful is someways, and very limiting in others. 
+I've setup a Vertex AI Search Datastore, previously known as Discovery Engine (a managed hyrbid vector store) to allow us to search our data efficiently. This isn't about the VertexAI service, but rather about how to build a distributed system to backfill that datastore in a performant and optimized manner. 
 
 The challenge is to pump 5.8million docs (each only a few MBs) from Mongo our primary datastore into Discovery Engine to populate it with data for an intial bulk load. 
 
+---
 
 ## **What's important to consider when doing this**
 
@@ -43,6 +42,8 @@ My 5.8million docs turn into about 87GB of data uncompressed so we're under this
 
 I'll also note that Vertex has a limit of 10million documents total you can keep in your datastore. 
 
+---
+
 ## **What's the process going to look like**
 
 From a high level we have few concrete steps
@@ -54,6 +55,8 @@ From a high level we have few concrete steps
 
 Seems simple enough, but let's dive into the fun. 
 
+---
+
 ## **What's hard/ what's interesting/ what are the challenges**
 
 We want this to be highly performant, reusable, and highly automated system. 
@@ -64,6 +67,7 @@ First we need to figure out how we're going to distribute this work. Fortunately
 
 So we can leverage Apache Beam's batch job with Dataflow to run our code, and distribute the work to multiple works dynamically. This will be the biggest help is managing lots of reads, and lots of writes. 
 
+---
 
 ## **What do we need to do to read performantly from Mongo**
 
@@ -79,6 +83,7 @@ We need to allow each Dataflow worker node to read
 
 > TODO show how we calculated the 900 number for read splits
 
+---
 
 ## **Transforming**
 
@@ -87,6 +92,7 @@ This is very inefficient, and instead we want to re-use one.
 
 Something about serialziation and not serializing things that can't be serialized. 
 
+---
 
 ##  **Partitioning the data**
 
@@ -117,6 +123,8 @@ The system we build needs to be flexible, if our data increases by 1 million doc
 
 Once each bucket fills up, we push it to GCS, and flush anything in memory. so we have a clean slate for the next batch of data for the next fike
 
+---
+
 ## **Writing to GCS and waiting**
 
 Writing to GCS is an async process, and since these files aren't small they will take some time.
@@ -127,9 +135,10 @@ GCS's client is known for commonly providing errors so you have to wrap it yours
 
 This next stage checks in on the uploads and won't complete the beam job until all uploads are complete. Once that's done, our Beam journey is done and the next stage to kick off
 
-## ** Post Beam World** 
+---
 
-Behind the scenes there's another api that fired off this Beam Job and has been monitoring it for completition. This api is async and long lived as it's job is to handle the next stage which is to fire off that glorious `importDocuments` api. Which could've been done by Beam, but seemed unneccessary for 5-10 distributed workers to handle 1 api call. Especially when I'll need to poll this endpoint 
+## **Post Beam World** 
 
-=====================
+Behind the scenes there's an api that laucnhed this batch Dataflow job and has been monitoring it for completition status. This api is async and long lived as it's job is to handle the next stage which is to fire off that glorious `importDocuments` api. Which could've been done by Beam, but seemed unneccessary for 5-10 distributed workers to handle 1 api call. Especially when I'll need to poll this endpoint 
+
 
